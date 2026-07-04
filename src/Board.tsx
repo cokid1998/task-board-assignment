@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Task, Status } from './types'
-import { getTasks } from './api/client'
+import { ApiError, getTasks, updateTask } from './api/client'
 import { Column } from './components/Column'
 
 const COLUMNS: { status: Status; title: string }[] = [
@@ -28,6 +28,7 @@ export default function Board() {
       // 에러 객체의 타입을 Error로 맞추기
       if (error instanceof Error) setError(error)
       else setError(new Error(String(Error)))
+      console.log(error)
     } finally {
       setLoading(false)
     }
@@ -37,13 +38,59 @@ export default function Board() {
     fetchTask()
   }, [])
 
-  // ⚠️ 서버에 저장하지 않고 로컬 상태만 바꾸는 "순진한" 이동입니다.
-  // TODO(P1): 낙관적 업데이트 + 실패 시 롤백 + 경쟁 상태 처리를 구현하세요.
-  //   - updateTask(id, { status, version }) 로 서버에 반영
-  //   - 실패(15%)하면 이전 상태로 되돌리고 사용자에게 알림
-  //   - 같은 카드를 빠르게 연속 이동해도 최종 상태가 서버와 일치하도록
-  const moveTask = (id: string, status: Status) => {
+  // 사용자가 가장 최근에 Drop한 status를 저장하는 ref
+  const lastReqTaskRef = useRef<Map<string, Status>>(new Map())
+
+  const moveTask = async (id: string, status: Status) => {
+    const targetTask = tasks?.find((t) => t.id === id)
+    if (!targetTask) return
+
+    lastReqTaskRef.current.set(id, status)
+
+    const backupTasks = tasks
+    // UI는 무조건 반영 (version이 반영이 안된 상태)
     setTasks((prev) => prev?.map((t) => (t.id === id ? { ...t, status } : t)))
+
+    // 시나리오
+    // Todo -> Progress -> Done 순서로 카드를 빠르게 움직였을 때
+    // Progress(version 0), Done(version 0)의 네트워크 요청이 동시에 간다
+
+    // Case 1. Progress(version 0)가 먼저 도착, 그러면 Done(version 0)은 409에러를 응답한다.
+    // 먼저온 progress(version 0)의 응답은 처리 하지 않고
+    // 나중에 오는 Done(version 0)의 409에러를 캐치해서 다시 요청한다
+
+    // Case 2. Done(version 0)가 먼저 도착, 그러면 Progress(version 0)은 409에러를 응답한다.
+    // 응답받은 Done(version 0)의 응답을 처리하고
+    // 나중에 오는 Progress(version 0)의 응답은 무시한다
+
+    try {
+      const updated = await updateTask(id, {
+        status,
+        version: targetTask.version,
+      })
+      // 사용자가 가장 최근에 Drop한 status가 같지않으면 UI에 반영하지 않음
+      if (lastReqTaskRef.current.get(id) !== status) return
+
+      // version을 최신화 시킴
+      setTasks((prev) => prev?.map((t) => (t.id === id ? updated : t)))
+    } catch (error: unknown) {
+      // 409에러 처리
+      if (error instanceof ApiError && error.status === 409) {
+        // 409가 일어날 당시 서버에 저장된 Task
+        const serverTask = (error.payload as { current: Task }).current
+        // 사용자의 마지막 status를 다시 요청
+        const updated = await updateTask(id, {
+          status: lastReqTaskRef.current.get(id),
+          version: serverTask.version,
+        })
+        // version을 최신화 시킴
+        setTasks((prev) => prev?.map((t) => (t.id === id ? updated : t)))
+        return
+      }
+      // 409에러가 아닌 모든 에러 처리
+      setTasks(backupTasks)
+      alert('이동이 서버 반영에 실패해서 롤백시킵니다.')
+    }
   }
 
   const byStatus = useMemo(() => {
