@@ -63,6 +63,14 @@ export default function Board() {
     // 응답받은 Done(version 0)의 응답을 처리하고
     // 나중에 오는 Progress(version 0)의 응답은 무시한다
 
+    // 지금 로직의 한계
+    // 1. 둘다 500에러가 나왔을 때 데이터 정합성이 틀어짐
+    // UI에는 Todo에 있어야하지만 progress에 위치하게 됨
+    // 2. 최신 요청이 성공했는데 낡은 요청이 500에러가 나왔을 때 화면 롤백을 잘못 시킴
+    // Done에 UI가 정상으로 표시되고 낡은 요청이 500에러가 옴
+    // backupTasks는 Todo를 가지고 있기 때문에 Todo로 롤백됨 <-- 잘못된 상황
+    // 3. 최신 요청이 성공했는데 낡은 요청이 409로 응답 <-- 불필요한 중복 요청이 발생함
+
     try {
       const updated = await updateTask(id, {
         status,
