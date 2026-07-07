@@ -38,65 +38,80 @@ export default function Board() {
     fetchTask()
   }, [])
 
-  // 사용자가 가장 최근에 Drop한 status를 저장하는 ref
-  const lastReqTaskRef = useRef<Map<string, Status>>(new Map())
+  type MoveAttempt = { mutationId: number; original: Task }
+  // 카드id별로 요청ID와 요청당시 카드의 데이터를 가지고 있는 ref
+  const moveAttemptsRef = useRef<Map<string, MoveAttempt>>(new Map())
+  // 요청ID
+  const mutationCounterRef = useRef(0)
 
   const moveTask = async (id: string, status: Status) => {
+    // 함수 실행당시 카드데이터
     const targetTask = tasks?.find((t) => t.id === id)
     if (!targetTask) return
 
-    lastReqTaskRef.current.set(id, status)
+    // 함수 실행당시 요청id생성 및 최신화
+    const mutationId = ++mutationCounterRef.current
+    // 이 카드에 대해 아직 끝나지 않고 진행 중인 시퀀스가 있는지 확인하는 변수
+    const existing = moveAttemptsRef.current.get(id)
+    // 첫 요청이면 함수 실행당시 카드데이터, 아니라면 기존 카드정보를 할당
+    const original = existing ? existing.original : targetTask
+    // 요청 정보를 ref에 저장
+    moveAttemptsRef.current.set(id, { mutationId, original })
 
-    const backupTasks = tasks
-    // UI는 무조건 반영 (version이 반영이 안된 상태)
+    // 낙관적 업데이트이기 때문에 UI는 무조건 업데이트
     setTasks((prev) => prev?.map((t) => (t.id === id ? { ...t, status } : t)))
 
-    // 시나리오
-    // Todo -> Progress -> Done 순서로 카드를 빠르게 움직였을 때
-    // Progress(version 0), Done(version 0)의 네트워크 요청이 동시에 간다
-
-    // Case 1. Progress(version 0)가 먼저 도착, 그러면 Done(version 0)은 409에러를 응답한다.
-    // 먼저온 progress(version 0)의 응답은 처리 하지 않고
-    // 나중에 오는 Done(version 0)의 409에러를 캐치해서 다시 요청한다
-
-    // Case 2. Done(version 0)가 먼저 도착, 그러면 Progress(version 0)은 409에러를 응답한다.
-    // 응답받은 Done(version 0)의 응답을 처리하고
-    // 나중에 오는 Progress(version 0)의 응답은 무시한다
-
-    // 지금 로직의 한계
-    // 1. 둘다 500에러가 나왔을 때 데이터 정합성이 틀어짐
-    // UI에는 Todo에 있어야하지만 progress에 위치하게 됨
-    // 2. 최신 요청이 성공했는데 낡은 요청이 500에러가 나왔을 때 화면 롤백을 잘못 시킴
-    // Done에 UI가 정상으로 표시되고 낡은 요청이 500에러가 옴
-    // backupTasks는 Todo를 가지고 있기 때문에 Todo로 롤백됨 <-- 잘못된 상황
-    // 3. 최신 요청이 성공했는데 낡은 요청이 409로 응답 <-- 불필요한 중복 요청이 발생함
+    // 함수실행당시 요청이 최신 요청인지 확인하는 함수
+    const isLatest = () =>
+      moveAttemptsRef.current.get(id)?.mutationId === mutationId
 
     try {
       const updated = await updateTask(id, {
         status,
         version: targetTask.version,
       })
-      // 사용자가 가장 최근에 Drop한 status가 같지않으면 UI에 반영하지 않음
-      if (lastReqTaskRef.current.get(id) !== status) return
 
-      // version을 최신화 시킴
+      // 응답을 받아왔을 때 낡은요청이면 그냥 리턴
+      // await updateTask가 아직 응답을 받아오지 못했는데 동일한 카드를 옮기면 그냥 리턴
+      if (!isLatest()) return
+
+      // 유효한 최신 요청이면 UI변경 (version을 최신화)
       setTasks((prev) => prev?.map((t) => (t.id === id ? updated : t)))
+      // 요청 관리 ref에서 삭제
+      moveAttemptsRef.current.delete(id)
     } catch (error: unknown) {
-      // 409에러 처리
+      // catch에 첫 진입시 최신 요청인지 확인하고 최신요청이 아니라면 밑에 로직을 실행할 필요가 없기 때문에 종료
+      if (!isLatest()) return
+
       if (error instanceof ApiError && error.status === 409) {
-        // 409가 일어날 당시 서버에 저장된 Task
+        // 2중 try/catch를 사용하여 409 재요청에 대한 에러를 처리할 수도 있지만
+        // 이 경우 코드가 너무 복잡해지고, 발생빈도가 낮은 엣지케이스이기 때문에 배제
+        // try {
+        // } catch (error) {}
+
         const serverTask = (error.payload as { current: Task }).current
-        // 사용자의 마지막 status를 다시 요청
         const updated = await updateTask(id, {
-          status: lastReqTaskRef.current.get(id),
+          status,
           version: serverTask.version,
         })
-        // version을 최신화 시킴
+
+        // 응답을 받아왔을 때 낡은요청이면 그냥 리턴
+        if (!isLatest()) return
+
         setTasks((prev) => prev?.map((t) => (t.id === id ? updated : t)))
+        moveAttemptsRef.current.delete(id)
+
         return
       }
-      // 409에러가 아닌 모든 에러 처리
-      setTasks(backupTasks)
+
+      // 409가 아닌 나머지 에러
+      const attempt = moveAttemptsRef.current.get(id)
+      if (attempt) {
+        setTasks((prev) =>
+          prev?.map((t) => (t.id === id ? attempt.original : t)),
+        )
+      }
+      moveAttemptsRef.current.delete(id)
       alert('이동이 서버 반영에 실패해서 롤백시킵니다.')
     }
   }
