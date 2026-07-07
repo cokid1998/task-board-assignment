@@ -9,7 +9,7 @@ const COLUMNS: { status: Status; title: string }[] = [
   { status: 'done', title: 'Done' },
 ]
 
-export default function Board() {
+export default function Board({ query }: { query: string }) {
   // tasks를 가져오는 요청을 실행하기 전과 진짜 tasks가 빈배열인 경우를 구별하기 위해 초기값으로 undefined를 사용
   const [tasks, setTasks] = useState<Task[] | undefined>(undefined)
   const [loading, setLoading] = useState(true)
@@ -116,6 +116,11 @@ export default function Board() {
     }
   }
 
+  // 검색어에 맞는 Task필터링
+  const filteredTasks = tasks?.filter((task) =>
+    task.title.toLowerCase().includes(query.toLowerCase()),
+  )
+
   const byStatus = useMemo(() => {
     // if (!tasks) return;
     // 위 처럼 맨 위에서 방어하지 않는 이유는 byStatus의 리턴타입을 Record<Status, Task[]>로 고정하기 위해
@@ -126,10 +131,10 @@ export default function Board() {
     }
 
     // tasks를 undefined로 초기화시켰기 때문에 방어코드 추가
-    if (!tasks) return map
-    for (const t of tasks) map[t.status].push(t)
+    if (!filteredTasks) return map
+    for (const t of filteredTasks) map[t.status].push(t)
     return map
-  }, [tasks])
+  }, [filteredTasks])
 
   if (loading) return <p className="hint">불러오는 중…</p>
 
