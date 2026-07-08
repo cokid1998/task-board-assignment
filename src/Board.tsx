@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Task, Status } from './types'
-import { ApiError, getTasks, updateTask, deleteTask } from './api/client'
+import {
+  ApiError,
+  getTasks,
+  updateTask,
+  deleteTask,
+  createTask,
+} from './api/client'
 import { Column } from './components/Column'
 import { type PriorityFilter } from './App'
+import { CreateTaskPayload } from './components/modal/CardCreateModal'
 
 const COLUMNS: { status: Status; title: string }[] = [
   { status: 'todo', title: 'To Do' },
@@ -152,6 +159,40 @@ export default function Board({
     }
   }
 
+  const handleCreateTask = async (form: CreateTaskPayload) => {
+    const { title, priority, description, status } = form
+    const tempId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const tempTask: Task = {
+      id: tempId,
+      title,
+      description,
+      status,
+      priority,
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    }
+
+    // 낙관적 업데이트
+    setTasks((prev) => {
+      // 타입에러 방어코드
+      if (!prev) return prev
+      return [tempTask, ...prev]
+    })
+
+    try {
+      const created = await createTask(form)
+      // 서버에서 진짜 생성돼서 응답으로온 데이터로 tasks변경
+      setTasks((prev) =>
+        prev?.map((task) => (task.id === tempId ? created : task)),
+      )
+    } catch {
+      setTasks((prev) => prev?.filter((task) => task.id !== tempId))
+      alert('테스크 생성이 서버 반영에 실패했습니다.')
+    }
+  }
+
   // 검색어에 맞는 Task필터링
   const filteredTasks = tasks?.filter((task) => {
     const matchesPriority =
@@ -200,6 +241,7 @@ export default function Board({
           tasks={byStatus[col.status]}
           onMove={moveTask}
           onDelete={handleDeleteTask}
+          onCreate={handleCreateTask}
         />
       ))}
     </div>

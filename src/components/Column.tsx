@@ -1,5 +1,8 @@
+import modalStore from '../store/modalStore'
 import type { Task, Status } from '../types'
 import { Card } from './Card'
+import CardCreateModal from './modal/CardCreateModal'
+import { type CreateTaskPayload } from './modal/CardCreateModal'
 
 interface Props {
   title: string
@@ -7,9 +10,19 @@ interface Props {
   tasks: Task[]
   onMove: (id: string, status: Status) => void
   onDelete: (id: string) => void
+  onCreate: (form: CreateTaskPayload) => void
 }
 
-export function Column({ title, status, tasks, onMove, onDelete }: Props) {
+export function Column({
+  title,
+  status,
+  tasks,
+  onMove,
+  onDelete,
+  onCreate,
+}: Props) {
+  const openModal = modalStore((state) => state.openModal)
+
   return (
     <section
       className="column"
@@ -21,6 +34,21 @@ export function Column({ title, status, tasks, onMove, onDelete }: Props) {
     >
       <h2 className="column-title">
         {title} <span className="count">{tasks.length}</span>
+        <button
+          onClick={() =>
+            openModal(<CardCreateModal status={status} onCreate={onCreate} />)
+          }
+          style={{
+            background: 'white',
+            border: '1px solid #dfe1e6',
+            borderRadius: '4px',
+            padding: '2px 8px',
+            fontSize: '12px',
+            cursor: 'pointer',
+          }}
+        >
+          + 추가
+        </button>
       </h2>
       <div className="column-body">
         {/* ⚠️ 5,000개를 그대로 렌더합니다. 대량 데이터 성능 최적화는 당신의 몫입니다. */}
