@@ -11,6 +11,13 @@ import { Column } from './components/Column'
 import { type PriorityFilter } from './App'
 import { CreateTaskPayload } from './components/modal/CardCreateModal'
 import { EditTaskPayload } from './components/modal/CardEditModal'
+import {
+  buildOptimisticTask,
+  filterTasks,
+  groupByStatus,
+  restoreAtIndex,
+  isLatestMutation,
+} from './lib/tasks'
 
 const COLUMNS: { status: Status; title: string }[] = [
   { status: 'todo', title: 'To Do' },
@@ -78,7 +85,7 @@ export default function Board({
 
     // 함수실행당시 요청이 최신 요청인지 확인하는 함수
     const isLatest = () =>
-      moveAttemptsRef.current.get(id)?.mutationId === mutationId
+      isLatestMutation(moveAttemptsRef.current.get(id)?.mutationId, mutationId)
 
     try {
       const updated = await updateTask(id, {
@@ -136,7 +143,9 @@ export default function Board({
     const targetTaskIndex = tasks?.findIndex((task) => task.id === id)
     const targetTask = tasks?.find((task) => task.id === id)
 
-    if (targetTaskIndex === -1 || !targetTask) return // 이미 없는 태스크면 아무것도 안 함
+    // 이미 없는 태스크면 아무것도 안 함
+    if (targetTaskIndex === undefined || targetTaskIndex === -1 || !targetTask)
+      return
 
     // UI는 성공 실패 상관없이 반영 (낙관적업데이트)
     setTasks((prev) => prev?.filter((task) => task.id !== id))
@@ -148,32 +157,16 @@ export default function Board({
         // 타입에러 방지용 코드
         if (!prev) return prev
 
-        // targetTask를 원래 위치에 넣기
-        const rollback = [
-          ...prev.slice(0, targetTaskIndex),
-          targetTask,
-          ...prev.slice(targetTaskIndex),
-        ]
-        return rollback
+        return restoreAtIndex(prev, targetTaskIndex, targetTask)
       })
       alert('삭제가 서버 반영에 실패해서 복원시킵니다.')
     }
   }
 
   const handleCreateTask = async (form: CreateTaskPayload) => {
-    const { title, priority, description, status } = form
     const tempId = crypto.randomUUID()
     const now = new Date().toISOString()
-    const tempTask: Task = {
-      id: tempId,
-      title,
-      description,
-      status,
-      priority,
-      createdAt: now,
-      updatedAt: now,
-      version: 0,
-    }
+    const tempTask = buildOptimisticTask(tempId, now, form)
 
     // 낙관적 업데이트
     setTasks((prev) => {
@@ -230,29 +223,14 @@ export default function Board({
   }
 
   // 검색어에 맞는 Task필터링
-  const filteredTasks = tasks?.filter((task) => {
-    const matchesPriority =
-      priorityFilter === 'all' || task.priority === priorityFilter
-    // early Return을 통해 함수내에서 가장 무거운 연산인 includes작업을 최소화 시키도록 성능 최적화
-    if (!matchesPriority) return false
-
-    const matchesQuery = task.title.toLowerCase().includes(query.toLowerCase())
-    return matchesQuery
-  })
+  const filteredTasks = tasks
+    ? filterTasks(tasks, query, priorityFilter)
+    : undefined
 
   const byStatus = useMemo(() => {
-    // if (!tasks) return;
-    // 위 처럼 맨 위에서 방어하지 않는 이유는 byStatus의 리턴타입을 Record<Status, Task[]>로 고정하기 위해
-    const map: Record<Status, Task[]> = {
-      todo: [],
-      'in-progress': [],
-      done: [],
-    }
-
-    // tasks를 undefined로 초기화시켰기 때문에 방어코드 추가
-    if (!filteredTasks) return map
-    for (const t of filteredTasks) map[t.status].push(t)
-    return map
+    if (!filteredTasks)
+      return { todo: [], 'in-progress': [], done: [] } as Record<Status, Task[]>
+    return groupByStatus(filteredTasks)
   }, [filteredTasks])
 
   if (loading) return <p className="hint">불러오는 중…</p>
