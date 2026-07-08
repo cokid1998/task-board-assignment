@@ -2,6 +2,7 @@ import { memo } from 'react'
 import type { Task } from '../types'
 import modalStore from '../store/modalStore'
 import CardDeleteModal from './modal/CardDeleteModal'
+import CardEditModal, { type EditTaskPayload } from './modal/CardEditModal'
 
 const PRIORITY_LABEL: Record<Task['priority'], string> = {
   high: 'High',
@@ -12,9 +13,11 @@ const PRIORITY_LABEL: Record<Task['priority'], string> = {
 export const Card = memo(function Card({
   task,
   onDelete,
+  onEdit,
 }: {
   task: Task
   onDelete: () => void
+  onEdit: (id: string, patch: EditTaskPayload) => void
 }) {
   const openModal = modalStore((state) => state.openModal)
   return (
@@ -33,6 +36,22 @@ export const Card = memo(function Card({
           {new Date(task.createdAt).toLocaleDateString()}
         </span>
       </div>
+
+      <button
+        style={{
+          position: 'absolute',
+          top: '4px',
+          right: '28px',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+        onClick={() => {
+          openModal(<CardEditModal task={task} onEdit={onEdit} />)
+        }}
+      >
+        ✎
+      </button>
 
       <button
         onClick={() => {

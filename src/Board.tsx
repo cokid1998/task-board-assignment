@@ -10,6 +10,7 @@ import {
 import { Column } from './components/Column'
 import { type PriorityFilter } from './App'
 import { CreateTaskPayload } from './components/modal/CardCreateModal'
+import { EditTaskPayload } from './components/modal/CardEditModal'
 
 const COLUMNS: { status: Status; title: string }[] = [
   { status: 'todo', title: 'To Do' },
@@ -193,6 +194,41 @@ export default function Board({
     }
   }
 
+  const handleEditTask = async (id: string, form: EditTaskPayload) => {
+    const targetTask = tasks?.find((task) => task.id === id)
+    if (!targetTask) return
+
+    setTasks((prev) =>
+      prev?.map((task) => (task.id === id ? { ...task, ...form } : task)),
+    )
+
+    try {
+      const updated = await updateTask(id, {
+        ...form,
+        version: targetTask.version,
+      })
+      setTasks((prev) => prev?.map((task) => (task.id === id ? updated : task)))
+      return
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.status === 409) {
+        const serverTask = (error.payload as { current: Task }).current
+        const updated = await updateTask(id, {
+          ...form,
+          version: serverTask.version,
+        })
+        setTasks((prev) =>
+          prev?.map((task) => (task.id === id ? updated : task)),
+        )
+        return
+      }
+      // 409가 아닌 에러 처리
+      setTasks((prev) =>
+        prev?.map((task) => (task.id === id ? targetTask : task)),
+      )
+      alert('수정이 서버 반영에 실패해서 롤백시킵니다.')
+    }
+  }
+
   // 검색어에 맞는 Task필터링
   const filteredTasks = tasks?.filter((task) => {
     const matchesPriority =
@@ -242,6 +278,7 @@ export default function Board({
           onMove={moveTask}
           onDelete={handleDeleteTask}
           onCreate={handleCreateTask}
+          onEdit={handleEditTask}
         />
       ))}
     </div>

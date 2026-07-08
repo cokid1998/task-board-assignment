@@ -3,6 +3,7 @@ import type { Task, Status } from '../types'
 import { Card } from './Card'
 import CardCreateModal from './modal/CardCreateModal'
 import { type CreateTaskPayload } from './modal/CardCreateModal'
+import { EditTaskPayload } from './modal/CardEditModal'
 
 interface Props {
   title: string
@@ -11,6 +12,7 @@ interface Props {
   onMove: (id: string, status: Status) => void
   onDelete: (id: string) => void
   onCreate: (form: CreateTaskPayload) => void
+  onEdit: (id: string, form: EditTaskPayload) => void
 }
 
 export function Column({
@@ -20,6 +22,7 @@ export function Column({
   onMove,
   onDelete,
   onCreate,
+  onEdit,
 }: Props) {
   const openModal = modalStore((state) => state.openModal)
 
@@ -53,7 +56,12 @@ export function Column({
       <div className="column-body">
         {/* ⚠️ 5,000개를 그대로 렌더합니다. 대량 데이터 성능 최적화는 당신의 몫입니다. */}
         {tasks.map((t) => (
-          <Card key={t.id} task={t} onDelete={() => onDelete(t.id)} />
+          <Card
+            key={t.id}
+            task={t}
+            onDelete={() => onDelete(t.id)}
+            onEdit={onEdit}
+          />
         ))}
       </div>
     </section>
