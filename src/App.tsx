@@ -1,6 +1,7 @@
 import { useState, useTransition } from 'react'
 import Board from './Board'
 import { type Priority } from './types'
+import ModalProvider from './provider/ModalProvider'
 
 export type PriorityFilter = Priority | 'all'
 
@@ -19,26 +20,30 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Task Board</h1>
-        <p className="hint">
-          스타터 baseline입니다. 요구사항은 <strong>과제 명세서</strong>를
-          참고하세요.
-        </p>
-        <input value={inputValue} onChange={handleChange} />
-        <select
-          value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value as PriorityFilter)}
-        >
-          <option value="all">전체</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </header>
-      <Board query={query} priorityFilter={priorityFilter} />
-    </div>
+    <ModalProvider>
+      <div className="app">
+        <header className="app-header">
+          <h1>Task Board</h1>
+          <p className="hint">
+            스타터 baseline입니다. 요구사항은 <strong>과제 명세서</strong>를
+            참고하세요.
+          </p>
+          <input value={inputValue} onChange={handleChange} />
+          <select
+            value={priorityFilter}
+            onChange={(e) =>
+              setPriorityFilter(e.target.value as PriorityFilter)
+            }
+          >
+            <option value="all">전체</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </header>
+        <Board query={query} priorityFilter={priorityFilter} />
+      </div>
+    </ModalProvider>
   )
 }
 
