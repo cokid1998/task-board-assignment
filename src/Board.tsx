@@ -50,7 +50,6 @@ export default function Board({
       // 에러 객체의 타입을 Error로 맞추기
       if (error instanceof Error) setError(error)
       else setError(new Error(String(Error)))
-      console.log(error)
     } finally {
       setLoading(false)
     }
