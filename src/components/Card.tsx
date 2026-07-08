@@ -16,7 +16,7 @@ export const Card = memo(function Card({
   onEdit,
 }: {
   task: Task
-  onDelete: () => void
+  onDelete: (id: string) => void
   onEdit: (id: string, patch: EditTaskPayload) => void
 }) {
   const openModal = modalStore((state) => state.openModal)
@@ -56,7 +56,9 @@ export const Card = memo(function Card({
       <button
         onClick={() => {
           // 삭제 모달 여는 로직
-          openModal(<CardDeleteModal task={task} onDelete={onDelete} />)
+          openModal(
+            <CardDeleteModal task={task} onDelete={() => onDelete(task.id)} />,
+          )
         }}
         style={{
           position: 'absolute',

@@ -56,12 +56,7 @@ export function Column({
       <div className="column-body">
         {/* ⚠️ 5,000개를 그대로 렌더합니다. 대량 데이터 성능 최적화는 당신의 몫입니다. */}
         {tasks.map((t) => (
-          <Card
-            key={t.id}
-            task={t}
-            onDelete={() => onDelete(t.id)}
-            onEdit={onEdit}
-          />
+          <Card key={t.id} task={t} onDelete={onDelete} onEdit={onEdit} />
         ))}
       </div>
     </section>

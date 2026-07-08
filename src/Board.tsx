@@ -138,30 +138,38 @@ export default function Board({
     }
   }
 
-  const handleDeleteTask = async (id: string) => {
+  const handleDeleteTask = useCallback(async (id: string) => {
+    // useCallback 의존성을 []로 유지하기 위해 Board 스코프의 tasks를 직접 참조하지 않고
+    // setTasks 콜백(prev)에서 최신 tasks를 받아 그 안에서 대상을 찾기
+
+    let targetTaskIndex = -1
+    let targetTask: Task | undefined
+
     // 에러시 원복을 위해 task의 순서와 task자체를 변수에 저장
-    const targetTaskIndex = tasks?.findIndex((task) => task.id === id)
-    const targetTask = tasks?.find((task) => task.id === id)
+    setTasks((prev) => {
+      if (!prev) return prev
+      targetTaskIndex = prev.findIndex((task) => task.id === id)
+      targetTask = prev.find((task) => task.id === id)
+      // 이미 없는 테스크면 아무것도 안 함
+      if (targetTaskIndex === -1 || !targetTask) return prev
+      // UI는 성공 실패 상관없이 반영 (낙관적업데이트)
+      return prev.filter((task) => task.id !== id)
+    })
 
-    // 이미 없는 태스크면 아무것도 안 함
-    if (targetTaskIndex === undefined || targetTaskIndex === -1 || !targetTask)
-      return
-
-    // UI는 성공 실패 상관없이 반영 (낙관적업데이트)
-    setTasks((prev) => prev?.filter((task) => task.id !== id))
+    if (targetTaskIndex === -1 || !targetTask) return
 
     try {
       await deleteTask(id)
     } catch {
       setTasks((prev) => {
         // 타입에러 방지용 코드
-        if (!prev) return prev
-
+        if (!prev || !targetTask) return prev
+        // targetTask를 원래 위치에 넣기
         return restoreAtIndex(prev, targetTaskIndex, targetTask)
       })
       alert('삭제가 서버 반영에 실패해서 복원시킵니다.')
     }
-  }
+  }, [])
 
   const handleCreateTask = async (form: CreateTaskPayload) => {
     const tempId = crypto.randomUUID()
@@ -187,40 +195,57 @@ export default function Board({
     }
   }
 
-  const handleEditTask = async (id: string, form: EditTaskPayload) => {
-    const targetTask = tasks?.find((task) => task.id === id)
-    if (!targetTask) return
+  const handleEditTask = useCallback(
+    async (id: string, form: EditTaskPayload) => {
+      // useCallback 의존성을 []로 유지하기 위해 Board 스코프의 tasks를 직접 참조하지 않고
+      // setTasks 콜백(prev)에서 최신 tasks를 받아 그 안에서 대상을 찾기
 
-    setTasks((prev) =>
-      prev?.map((task) => (task.id === id ? { ...task, ...form } : task)),
-    )
+      let targetTask: Task | undefined
 
-    try {
-      const updated = await updateTask(id, {
-        ...form,
-        version: targetTask.version,
+      setTasks((prev) => {
+        if (!prev) return prev
+        targetTask = prev.find((task) => task.id === id)
+        if (!targetTask) return prev
+        // 낙관적 업데이트
+        return prev.map((task) =>
+          task.id === id ? { ...task, ...form } : task,
+        )
       })
-      setTasks((prev) => prev?.map((task) => (task.id === id ? updated : task)))
-      return
-    } catch (error: unknown) {
-      if (error instanceof ApiError && error.status === 409) {
-        const serverTask = (error.payload as { current: Task }).current
+
+      if (!targetTask) return
+
+      try {
         const updated = await updateTask(id, {
           ...form,
-          version: serverTask.version,
+          version: targetTask.version,
         })
+        // 유효한 요청이면 UI변경 (version을 최신화)
         setTasks((prev) =>
           prev?.map((task) => (task.id === id ? updated : task)),
         )
         return
+      } catch (error: unknown) {
+        if (error instanceof ApiError && error.status === 409) {
+          const serverTask = (error.payload as { current: Task }).current
+          const updated = await updateTask(id, {
+            ...form,
+            version: serverTask.version,
+          })
+          setTasks((prev) =>
+            prev?.map((task) => (task.id === id ? updated : task)),
+          )
+          return
+        }
+
+        // 409가 아닌 에러 처리
+        setTasks((prev) =>
+          prev?.map((task) => (task.id === id ? (targetTask as Task) : task)),
+        )
+        alert('수정이 서버 반영에 실패해서 롤백시킵니다.')
       }
-      // 409가 아닌 에러 처리
-      setTasks((prev) =>
-        prev?.map((task) => (task.id === id ? targetTask : task)),
-      )
-      alert('수정이 서버 반영에 실패해서 롤백시킵니다.')
-    }
-  }
+    },
+    [],
+  )
 
   // 검색어에 맞는 Task필터링
   const filteredTasks = tasks
