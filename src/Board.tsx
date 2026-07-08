@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Task, Status } from './types'
-import { ApiError, getTasks, updateTask } from './api/client'
+import { ApiError, getTasks, updateTask, deleteTask } from './api/client'
 import { Column } from './components/Column'
 import { type PriorityFilter } from './App'
 
@@ -123,6 +123,35 @@ export default function Board({
     }
   }
 
+  const handleDeleteTask = async (id: string) => {
+    // 에러시 원복을 위해 task의 순서와 task자체를 변수에 저장
+    const targetTaskIndex = tasks?.findIndex((task) => task.id === id)
+    const targetTask = tasks?.find((task) => task.id === id)
+
+    if (targetTaskIndex === -1 || !targetTask) return // 이미 없는 태스크면 아무것도 안 함
+
+    // UI는 성공 실패 상관없이 반영 (낙관적업데이트)
+    setTasks((prev) => prev?.filter((task) => task.id !== id))
+
+    try {
+      await deleteTask(id)
+    } catch {
+      setTasks((prev) => {
+        // 타입에러 방지용 코드
+        if (!prev) return prev
+
+        // targetTask를 원래 위치에 넣기
+        const rollback = [
+          ...prev.slice(0, targetTaskIndex),
+          targetTask,
+          ...prev.slice(targetTaskIndex),
+        ]
+        return rollback
+      })
+      alert('삭제가 서버 반영에 실패해서 복원시킵니다.')
+    }
+  }
+
   // 검색어에 맞는 Task필터링
   const filteredTasks = tasks?.filter((task) => {
     const matchesPriority =
@@ -170,6 +199,7 @@ export default function Board({
           status={col.status}
           tasks={byStatus[col.status]}
           onMove={moveTask}
+          onDelete={handleDeleteTask}
         />
       ))}
     </div>

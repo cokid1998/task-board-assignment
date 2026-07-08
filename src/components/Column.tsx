@@ -6,9 +6,10 @@ interface Props {
   status: Status
   tasks: Task[]
   onMove: (id: string, status: Status) => void
+  onDelete: (id: string) => void
 }
 
-export function Column({ title, status, tasks, onMove }: Props) {
+export function Column({ title, status, tasks, onMove, onDelete }: Props) {
   return (
     <section
       className="column"
@@ -24,7 +25,7 @@ export function Column({ title, status, tasks, onMove }: Props) {
       <div className="column-body">
         {/* ⚠️ 5,000개를 그대로 렌더합니다. 대량 데이터 성능 최적화는 당신의 몫입니다. */}
         {tasks.map((t) => (
-          <Card key={t.id} task={t} />
+          <Card key={t.id} task={t} onDelete={() => onDelete(t.id)} />
         ))}
       </div>
     </section>

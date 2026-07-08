@@ -1,5 +1,7 @@
 import { memo } from 'react'
 import type { Task } from '../types'
+import modalStore from '../store/modalStore'
+import CardDeleteModal from './modal/CardDeleteModal'
 
 const PRIORITY_LABEL: Record<Task['priority'], string> = {
   high: 'High',
@@ -7,10 +9,18 @@ const PRIORITY_LABEL: Record<Task['priority'], string> = {
   low: 'Low',
 }
 
-export const Card = memo(function Card({ task }: { task: Task }) {
+export const Card = memo(function Card({
+  task,
+  onDelete,
+}: {
+  task: Task
+  onDelete: () => void
+}) {
+  const openModal = modalStore((state) => state.openModal)
   return (
     <article
       className={`card priority-${task.priority}`}
+      style={{ position: 'relative' }}
       draggable
       onDragStart={(e) => e.dataTransfer.setData('text/plain', task.id)}
     >
@@ -23,6 +33,23 @@ export const Card = memo(function Card({ task }: { task: Task }) {
           {new Date(task.createdAt).toLocaleDateString()}
         </span>
       </div>
+
+      <button
+        onClick={() => {
+          // 삭제 모달 여는 로직
+          openModal(<CardDeleteModal task={task} onDelete={onDelete} />)
+        }}
+        style={{
+          position: 'absolute',
+          top: '4px',
+          right: '4px',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        ✕
+      </button>
     </article>
   )
 })
