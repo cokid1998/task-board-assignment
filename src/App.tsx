@@ -1,10 +1,14 @@
 import { useState, useTransition } from 'react'
 import Board from './Board'
+import { type Priority } from './types'
+
+export type PriorityFilter = Priority | 'all'
 
 export default function App() {
   const [inputValue, setInputValue] = useState('')
   const [query, setQuery] = useState('')
   const [_, startTransition] = useTransition()
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value) // UI에는 즉시 반영
@@ -23,8 +27,17 @@ export default function App() {
           참고하세요.
         </p>
         <input value={inputValue} onChange={handleChange} />
+        <select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value as PriorityFilter)}
+        >
+          <option value="all">전체</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
       </header>
-      <Board query={query} />
+      <Board query={query} priorityFilter={priorityFilter} />
     </div>
   )
 }

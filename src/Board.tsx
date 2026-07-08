@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Task, Status } from './types'
 import { ApiError, getTasks, updateTask } from './api/client'
 import { Column } from './components/Column'
+import { type PriorityFilter } from './App'
 
 const COLUMNS: { status: Status; title: string }[] = [
   { status: 'todo', title: 'To Do' },
@@ -9,7 +10,13 @@ const COLUMNS: { status: Status; title: string }[] = [
   { status: 'done', title: 'Done' },
 ]
 
-export default function Board({ query }: { query: string }) {
+export default function Board({
+  query,
+  priorityFilter,
+}: {
+  query: string
+  priorityFilter: PriorityFilter
+}) {
   // tasks를 가져오는 요청을 실행하기 전과 진짜 tasks가 빈배열인 경우를 구별하기 위해 초기값으로 undefined를 사용
   const [tasks, setTasks] = useState<Task[] | undefined>(undefined)
   const [loading, setLoading] = useState(true)
@@ -117,9 +124,15 @@ export default function Board({ query }: { query: string }) {
   }
 
   // 검색어에 맞는 Task필터링
-  const filteredTasks = tasks?.filter((task) =>
-    task.title.toLowerCase().includes(query.toLowerCase()),
-  )
+  const filteredTasks = tasks?.filter((task) => {
+    const matchesPriority =
+      priorityFilter === 'all' || task.priority === priorityFilter
+    // early Return을 통해 함수내에서 가장 무거운 연산인 includes작업을 최소화 시키도록 성능 최적화
+    if (!matchesPriority) return false
+
+    const matchesQuery = task.title.toLowerCase().includes(query.toLowerCase())
+    return matchesQuery
+  })
 
   const byStatus = useMemo(() => {
     // if (!tasks) return;
